@@ -98,7 +98,7 @@ impl Exporter<'_> {
             return;
         }
         let font = self.font(face);
-        if font.is_none() && !self.outlined.contains(&face.id()) {
+        if font.is_none() && !self.outlined.contains(&face.id()) && face.bitmap.is_none() {
             log::warn!("PDF: font {} {} could not be embedded", face.family, face.style);
             return;
         }
@@ -187,7 +187,7 @@ impl Exporter<'_> {
         let glyphs: Vec<_> = shaped.iter().map(|g| (g.cluster, f64::from(g.x_advance), f64::from(g.x_offset), f64::from(g.y_offset))).collect();
         let Some(lay) = t.layout(face.upem, face.ascent, face.descent, &glyphs) else { return };
         let font = self.font(&face);
-        if font.is_none() && !self.outlined.contains(&face.id()) {
+        if font.is_none() && !self.outlined.contains(&face.id()) && face.bitmap.is_none() {
             return;
         }
         let em = lay.em as f32;

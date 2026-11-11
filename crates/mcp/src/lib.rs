@@ -73,7 +73,17 @@ fn answer_on(session: &mut Session, method: &str, params: Value) -> Result<Value
             let p = params.get("params").cloned().filter(|v| !v.is_null()).unwrap_or(json!({}));
             session.run(&id, &p).map_err(|e| e.to_string())
         }
-        "engine.commands" => Ok(session.registry.describe()),
+        "engine.commands" => {
+            let mut commands = session.registry.describe();
+            if let Some(commands) = commands.as_array_mut() {
+                for command in commands {
+                    let reason = session.why_disabled(command.get("id").and_then(Value::as_str).unwrap_or(""));
+                    command["enabled"] = json!(reason.is_none());
+                    command["disabled_reason"] = json!(reason);
+                }
+            }
+            Ok(commands)
+        }
         "document.inspect" => session.run("document.inspect", &params).map_err(|e| e.to_string()),
         "ui.parity" => Ok(wordcraft_engine::catalog::parity(&session.registry)),
         "ui.render" | "render.page" => {

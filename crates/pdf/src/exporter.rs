@@ -47,7 +47,7 @@ pub(crate) struct Exporter<'a> {
 
 impl Exporter<'_> {
     fn font(&mut self, face: &FaceRef) -> Option<Font> {
-        if self.outlined.contains(&face.id()) {
+        if self.outlined.contains(&face.id()) || face.bitmap.is_some() {
             return None;
         }
         let font_error = &mut self.font_error;

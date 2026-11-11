@@ -37,6 +37,7 @@ pub(super) enum FontBytes {
 
 /// One loaded font face.
 pub struct FontFace {
+    pub bitmap: Option<Arc<crate::bitmap::BitmapFont>>,
     pub(super) id: u32,
     /// Typographic family name (e.g. "Source Sans 3").
     pub family: String,
@@ -67,7 +68,7 @@ pub struct FontFace {
     /// values).
     pub cap_height: f64,
     pub x_height: f64,
-    pub shaper: harfrust::ShaperData,
+    pub shaper: Option<harfrust::ShaperData>,
     /// Variable fonts: the named instance's axis settings (user units; empty = default instance),
     /// the normalised location and the shaper's view of it.
     pub coords: Vec<([u8; 4], f32)>,
@@ -232,6 +233,10 @@ impl FontFace {
         (!pen.over).then_some(pen.path)
     }
     pub(super) fn draw_outline(&self, gid: u32, max_elements: usize) -> FlipPen {
+        if let Some(path) = self.bitmap_path(gid) {
+            let over = path.elements().len() > max_elements;
+            return FlipPen { path: if over { BezPath::new() } else { path }, room: 0, over, hinted: false };
+        }
         let mut pen = FlipPen { path: BezPath::new(), room: max_elements, over: false, hinted: false };
         if let Some(f) = self.skrifa()
             && let Some(g) = f.outline_glyphs().get(GlyphId::new(gid))
@@ -335,6 +340,9 @@ impl FontFace {
     }
     /// Does the face map `c` to a glyph?
     pub fn covers(&self, c: char) -> bool {
+        if let Some(font) = &self.bitmap {
+            return font.gid(c) != 0;
+        }
         let cp = c as u32;
         if cp < 0x1_0000 {
             let bits = self.bmp.get_or_init(|| {
@@ -368,6 +376,9 @@ impl FontFace {
     }
     /// Every mapped character and its glyph id, sorted by code point (the Glyphs panel).
     pub fn chars(&self) -> Vec<(char, u32)> {
+        if let Some(font) = &self.bitmap {
+            return font.glyphs.keys().filter_map(|cp| char::from_u32(*cp).map(|c| (c, *cp + 1))).collect();
+        }
         let Some(f) = self.skrifa() else { return vec![] };
         let mut v: Vec<(char, u32)> = f.charmap().mappings().filter_map(|(cp, g)| char::from_u32(cp).map(|c| (c, g.to_u32()))).collect();
         v.sort_unstable_by_key(|x| x.0);
@@ -376,6 +387,9 @@ impl FontFace {
     }
     /// Advance width of glyph `gid` in font units.
     pub fn advance(&self, gid: u32) -> f64 {
+        if let Some(font) = &self.bitmap {
+            return font.advance(gid) as f64;
+        }
         self.skrifa()
             .and_then(|f| f.glyph_metrics(Size::unscaled(), self.location()).advance_width(GlyphId::new(gid)))
             .map(|a| a as f64)
@@ -383,6 +397,9 @@ impl FontFace {
     }
     /// Glyph id for `c` (0 = .notdef).
     pub fn glyph_for(&self, c: char) -> u32 {
+        if let Some(font) = &self.bitmap {
+            return font.gid(c);
+        }
         self.skrifa().and_then(|f| f.charmap().map(c)).map(|g| g.to_u32()).unwrap_or(0)
     }
     /// Is this an East Asian (Chinese, Japanese or Korean) font? Its OS/2 code pages say so
@@ -453,5 +470,53 @@ impl OutlinePen for FlipPen {
         if self.take() {
             self.path.close_path();
         }
+    }
+}
+
+impl FontFace {
+    pub fn from_bitmap(font: Arc<crate::bitmap::BitmapFont>) -> Self {
+        Self {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            family: font.family.clone(),
+            style: font.style.clone(),
+            weight: font.weight,
+            italic: font.italic,
+            upem: font.pixels as f64,
+            ascent: font.ascent as f64,
+            descent: font.descent as f64,
+            cap_height: font.ascent as f64,
+            x_height: font.ascent as f64 * 0.5,
+            shaper: None,
+            coords: Vec::new(),
+            location: Location::default(),
+            instance: None,
+            bytes: FontBytes::Owned(font.data.clone()),
+            index: 0,
+            bmp: Default::default(),
+            legacy_family: font.family.clone(),
+            local_names: Vec::new(),
+            full_name: None,
+            postscript: None,
+            outline_hinter: Default::default(),
+            glyph_styles: Default::default(),
+            hint_draws: Default::default(),
+            hint_slow: Default::default(),
+            hinting_off: Default::default(),
+            #[cfg(not(target_arch = "wasm32"))]
+            hint_strike: HINT_STRIKE,
+            bitmap: Some(font),
+        }
+    }
+    pub fn bitmap_path(&self, gid: u32) -> Option<BezPath> {
+        let font = self.bitmap.as_ref()?;
+        let mut path = BezPath::new();
+        for [x, y, w, h] in font.rectangles(gid) {
+            path.move_to((x, y));
+            path.line_to((x + w, y));
+            path.line_to((x + w, y + h));
+            path.line_to((x, y + h));
+            path.close_path();
+        }
+        Some(path)
     }
 }

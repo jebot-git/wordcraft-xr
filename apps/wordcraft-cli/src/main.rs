@@ -887,6 +887,10 @@ fn parity_markdown(p: &Value) -> String {
 }
 
 fn main() -> ExitCode {
+    if let Err(error) = wordcraft_engine::validate_bitmap() {
+        eprintln!("DomeD bitmap font: {error}");
+        return ExitCode::FAILURE;
+    }
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
     // Language packs installed in the suite's font store are used; `proof.installPack` installs
     // only while the person has turned downloading on in the app.

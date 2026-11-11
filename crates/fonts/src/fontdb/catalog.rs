@@ -11,6 +11,9 @@ impl FontDb {
     /// Word's font list, this holds each face's legacy family name too ("Roboto Light", "Inter
     /// SemiBold"), which [`FontDb::face`] resolves to that face.
     pub fn families(&self) -> Vec<String> {
+        if crate::bitmap::configured() {
+            return crate::bitmap::families();
+        }
         let mut v: Vec<String> = self.read_faces().iter().flat_map(|f| [f.family.clone(), f.legacy_family.clone()]).collect();
         #[cfg(not(target_arch = "wasm32"))]
         v.extend(self.read_catalog().iter().flat_map(|c| [c.family.clone(), c.legacy.clone()]));
@@ -81,6 +84,9 @@ impl FontDb {
     /// name ("Roboto Light"), the styles of the faces it names ("Light", "Light Italic"); for a
     /// localized name (宋体), those of the family it names.
     pub fn styles(&self, family: &str) -> Vec<String> {
+        if crate::bitmap::configured() {
+            return crate::bitmap::styles(family);
+        }
         let v = self.styles_named(family);
         match self.english_family(family) {
             Some(en) if v.is_empty() => self.styles_named(&en),

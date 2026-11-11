@@ -65,6 +65,7 @@ fn tool(name: &str, title: &str, desc: &str, schema: Value, ro: bool) -> Value {
 /// Every MCP tool with its title, description, input schema and annotations (`tools/list`).
 pub fn tool_definitions() -> Value {
     json!([
+        json!({"name":"domed_bitmap_status","description":"DomeD bitmap provider identity and strike metrics","inputSchema":{"type":"object","properties":{},"additionalProperties":false},"annotations":{"readOnlyHint":true}}),
         tool(
             "list_commands",
             "List commands",
@@ -226,6 +227,12 @@ fn wrap(r: Result<Value, String>) -> ToolResult {
 /// Run tool `name` with arguments `a` through backend `b` (`tools/call`); unknown tools and
 /// failed calls are error results, never panics.
 pub fn call_tool(b: &mut dyn Backend, name: &str, a: &Value) -> ToolResult {
+    if name == "domed_bitmap_status" {
+        return match wordcraft_engine::bitmap_status() {
+            Ok(value) => ToolResult::json(&value),
+            Err(error) => ToolResult::error(error),
+        };
+    }
     let st = |k: &str| a.get(k).and_then(Value::as_str);
     let doc = a.get("doc").filter(|d| !d.is_null());
     match name {

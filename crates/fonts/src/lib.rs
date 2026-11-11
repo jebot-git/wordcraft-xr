@@ -8,6 +8,12 @@
 #![forbid(unsafe_code)]
 
 pub mod color;
+pub mod bitmap {
+    include!(concat!(env!("DOME_OFFICE_COMMON"), "/bitmap.rs"));
+}
+mod bitmap_harf {
+    include!(concat!(env!("DOME_OFFICE_COMMON"), "/harf.rs"));
+}
 mod fontdb;
 pub mod math;
 mod script;
@@ -262,9 +268,27 @@ fn shape_dir(
     rtl: bool,
     around: ShapeContext<'_>,
 ) -> Vec<ShapedGlyph> {
+    if let Some(font) = &face.bitmap {
+        let mut out = Vec::new();
+        for range in script::script_runs(text) {
+            if let Some(piece) = text.get(range.clone()) {
+                let context = around.at_edges_of(text, &range);
+                out.extend(
+                    crate::bitmap_harf::shape(font, piece, features, rtl, context.before, context.after, map).into_iter().map(|g| ShapedGlyph {
+                        gid: g.gid,
+                        cluster: range.start + g.cluster,
+                        x_advance: g.advance,
+                        x_offset: g.x,
+                        y_offset: g.y,
+                    }),
+                );
+            }
+        }
+        return out;
+    }
     let mut out = Vec::with_capacity(text.len());
-    let shaped = face.hb().map(|hb| {
-        let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
+    let shaped = face.hb().zip(face.shaper.as_ref()).map(|(hb, data)| {
+        let shaper = data.shaper(&hb).instance(face.instance.as_ref()).build();
         // One script per shaping call: the shaper picks its script engine (Myanmar, Khmer,
         // Indic, USE reordering…) from the run's script, so "Hi မြန်မာ" in one face must not be
         // shaped as Latin. Runs come in text order; right-to-left callers regroup by cluster.
@@ -421,7 +445,7 @@ mod tests {
     fn kept_shape_plans_shape_as_fresh_ones() {
         let fresh = |face: &FontFace, text: &str, features: &[Feature], rtl: bool| -> Vec<(u32, u32, i32, i32, i32)> {
             let Some(hb) = face.hb() else { return Vec::new() };
-            let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
+            let shaper = face.shaper.as_ref().expect("test SFNT shaper").shaper(&hb).instance(face.instance.as_ref()).build();
             let mut buf = UnicodeBuffer::new();
             buf.push_str(text);
             buf.guess_segment_properties();
@@ -457,7 +481,7 @@ mod tests {
         let face = FontDb::global().face(DEFAULT_FAMILY, "Regular");
         let fresh = |features: &[Feature], rtl: bool| -> Vec<(u32, i32)> {
             let Some(hb) = face.hb() else { return Vec::new() };
-            let shaper = face.shaper.shaper(&hb).instance(face.instance.as_ref()).build();
+            let shaper = face.shaper.as_ref().expect("test SFNT shaper").shaper(&hb).instance(face.instance.as_ref()).build();
             let mut buf = UnicodeBuffer::new();
             buf.push_str("office");
             buf.guess_segment_properties();

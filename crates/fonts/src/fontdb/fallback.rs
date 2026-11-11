@@ -10,12 +10,26 @@ impl FontDb {
     /// First face (fallback family first, then load order) that covers `c`; on native, system
     /// fonts are cataloged and loaded lazily the first time no loaded face covers a character.
     pub fn fallback_for(&self, c: char, exclude: u32) -> Option<Arc<FontFace>> {
+        if crate::bitmap::configured() {
+            if let Some(face) = self.read_faces().iter().find(|f| f.id() != exclude && f.covers(c)).cloned() {
+                return Some(face);
+            }
+            if let Some(font) = crate::bitmap::fallback(c) {
+                let face = Arc::new(FontFace::from_bitmap(font));
+                self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner).push(face.clone());
+                return Some(face);
+            }
+            return None;
+        }
         self.fallback_styled(c, exclude, false, false)
     }
 
     /// [`Self::fallback_for`], preferring a bold and/or italic face of the chosen family (so
     /// bold Persian text in a font without Persian letters stays bold).
     pub fn fallback_styled(&self, c: char, exclude: u32, bold: bool, italic: bool) -> Option<Arc<FontFace>> {
+        if crate::bitmap::configured() {
+            return self.fallback_for(c, exclude);
+        }
         let base = self.cached_fallback(c, exclude)?;
         if !bold && !italic {
             return Some(base);

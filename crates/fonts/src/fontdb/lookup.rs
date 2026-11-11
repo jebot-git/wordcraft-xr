@@ -12,6 +12,19 @@ impl FontDb {
     /// name ("Roboto Light", whose styles are Light and Light Italic). Installed system fonts are
     /// found by name whatever ran before. An exact full or PostScript name selects its face.
     pub fn face(&self, family: &str, style: &str) -> Arc<FontFace> {
+        if crate::bitmap::configured() {
+            if let Some(font) = crate::bitmap::named(family, style) {
+                if let Some(face) = self.read_faces().iter().find(|f| f.bitmap.as_ref().is_some_and(|b| Arc::ptr_eq(b, &font))).cloned() {
+                    return face;
+                }
+                let face = Arc::new(FontFace::from_bitmap(font));
+                self.faces.write().unwrap_or_else(std::sync::PoisonError::into_inner).push(face.clone());
+                return face;
+            }
+            if let Some(face) = self.read_faces().iter().find(|f| f.bitmap.is_some()).cloned() {
+                return face;
+            }
+        }
         if let Some(f) = self.find(family, style) {
             return f;
         }

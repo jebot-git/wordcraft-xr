@@ -210,3 +210,16 @@ pub mod p {
 
 #[cfg(test)]
 mod tests;
+
+/// Validate the downstream bitmap strike before opening documents.
+pub fn validate_bitmap() -> std::result::Result<(), String> {
+    wordcraft_fonts::bitmap::from_env().map(|_| ())
+}
+
+/// Runtime attestation for the private DomeD transport.
+pub fn bitmap_status() -> std::result::Result<serde_json::Value, String> {
+    let font = wordcraft_fonts::bitmap::from_env()?;
+    Ok(
+        serde_json::json!({"provider":"domed-bdf-v1","family":font.family,"pixels":font.pixels,"glyphs":font.glyphs.len(),"outlineFallback":false,"shaping":"harfrust-bdf","families":wordcraft_fonts::bitmap::families()}),
+    )
+}

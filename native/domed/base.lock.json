@@ -1,0 +1,7 @@
+{
+  "application": "wordcraft",
+  "repository": "https://github.com/jebot-git/dome-craft-base.git",
+  "revision": "5afad09884fae518dd79c528c762859a1e9c31f8",
+  "upstream_revision": "060768f1ed7f310e639bc49d7af7256e129f7409",
+  "cargo_args": []
+}

@@ -208,6 +208,9 @@ pub(super) fn mini_font(tables: &[([u8; 4], Vec<u8>)]) -> Vec<u8> {
 /// The platform's font folders (the system's and the user's), scanned by [`FontDb::global`].
 /// Empty on wasm.
 pub fn system_font_dirs() -> Vec<std::path::PathBuf> {
+    if crate::bitmap::configured() {
+        return Vec::new();
+    }
     let mut dirs: Vec<std::path::PathBuf> = Vec::new();
     if cfg!(target_arch = "wasm32") {
         return dirs;
@@ -330,6 +333,9 @@ pub(super) fn enumerate_faces(data: &[u8], limit: usize) -> Vec<Found> {
 
 /// The compiled-in Source Sans 3 Regular, for a database that somehow has no faces at all.
 pub(crate) fn last_resort_face() -> Arc<FontFace> {
+    if let Ok(font) = crate::bitmap::from_env() {
+        return Arc::new(FontFace::from_bitmap(font.clone()));
+    }
     static FACE: std::sync::OnceLock<Arc<FontFace>> = std::sync::OnceLock::new();
     FACE.get_or_init(|| {
         // The font is compiled in (`include_bytes!`), so parsing it can't depend on input; the
@@ -354,6 +360,9 @@ pub(super) fn make_face(
         FontBytes::Static(b) => b,
         FontBytes::Owned(v) => v.as_slice(),
     };
+    if crate::bitmap::configured() {
+        return None;
+    }
     let f = skrifa::FontRef::from_index(data, index).ok()?;
     let settings: Vec<(skrifa::Tag, f32)> = coords.iter().map(|(t, v)| (skrifa::Tag::new(t), *v)).collect();
     let location = if coords.is_empty() { Location::default() } else { f.axes().location(settings.iter().copied()) };
@@ -386,7 +395,8 @@ pub(super) fn make_face(
         descent: -(m.descent as f64),
         cap_height: m.cap_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.72),
         x_height: m.x_height.map(|v| v as f64).filter(|v| *v > 0.0).unwrap_or(m.ascent as f64 * 0.5),
-        shaper,
+        shaper: Some(shaper),
+        bitmap: None,
         coords,
         location,
         instance,

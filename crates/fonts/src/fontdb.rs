@@ -105,13 +105,17 @@ impl FontDb {
 
     fn with_static_fonts(font_dirs: Vec<std::path::PathBuf>, fonts: impl Iterator<Item = &'static [u8]>) -> Self {
         let mut faces = Vec::new();
-        for data in fonts {
+        for data in fonts.filter(|_| !crate::bitmap::configured()) {
             for f in enumerate_faces(data, MAX_FILE_FACES) {
                 if let Some(mut face) = make_face(FontBytes::Static(data), f.index, f.family, f.style, f.legacy, f.coords) {
                     face.local_names = f.local;
                     faces.push(Arc::new(face));
                 }
             }
+        }
+        if let Ok(font) = crate::bitmap::from_env() {
+            faces.clear();
+            faces.push(Arc::new(FontFace::from_bitmap(font.clone())));
         }
         Self {
             faces: RwLock::new(faces),

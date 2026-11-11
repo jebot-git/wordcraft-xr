@@ -698,5 +698,11 @@ fn layout_summary(s: &mut Session, _: &Value) -> CmdResult {
         })
         .collect();
     let caret = l.caret_on(&s.sel.focus, s.page_hint).map(|c| json!({"page": c.page, "x": c.x, "y": c.top, "h": c.height}));
-    Ok(json!({"pages": pages, "caret": caret, "ms": l.ms}))
+    let selection: Vec<Value> = l
+        .selection_rects(&s.doc, &s.sel.anchor, &s.sel.focus, s.page_hint)
+        .into_iter()
+        .take(100000)
+        .map(|(page, rect)| json!({"page":page,"rect":rect}))
+        .collect();
+    Ok(json!({"pages": pages, "caret": caret, "selection":selection, "ms": l.ms}))
 }
